@@ -1,69 +1,77 @@
 from flask import Flask, render_template, request, jsonify
 import requests
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 
-TOMTOM_API_KEY = "YOUR_TOMTOM_API_KEY"
-
-def geocode_location(location):
-    url = f"https://api.tomtom.com/search/2/geocode/{location}.json?key={TOMTOM_API_KEY}"
-    res = requests.get(url)
-    if res.status_code == 200:
-        data = res.json()
-        if data['results']:
-            lat = data['results'][0]['position']['lat']
-            lon = data['results'][0]['position']['lon']
-            return lat, lon
-    return None, None
+TOMTOM_API_KEY = os.getenv('TOMTOM_API_KEY', '8apa9iB3Hpwhh1LWONc8ZJ1TbGttgVDK')
 
 @app.route('/')
-def home():
-    return render_template('index.html')
+def index():
+    return render_template('index.html', api_key=TOMTOM_API_KEY)
 
-@app.route('/route', methods=['POST'])
-def get_route():
-    start = request.form['start']
-    end = request.form['end']
+@app.route('/calculate_route', methods=['POST'])
+def calculate_route():
+    data = request.json
+    
+    # Extract parameters from the request
+    start = data.get('start')
+    end = data.get('end')
+    route_type = data.get('routeType', 'fastest')
+    traffic = data.get('traffic', 'true')
 
-    start_lat, start_lon = geocode_location(start)
-    end_lat, end_lon = geocode_location(end)
+    def geocode_location(location):
+        geocode_url = f"https://api.tomtom.com/search/2/geocode/{location}.json"
+        geocode_params = {
+            'key': TOMTOM_API_KEY,
+            'limit': 1
+        }
+        try:
+            resp = requests.get(geocode_url, params=geocode_params)
+            resp.raise_for_status()
+            results = resp.json().get('results', [])
+            if results:
+                position = results[0]['position']
+                return f"{position['lat']},{position['lon']}"
+            else:
+                return None
+        except Exception as e:
+            return None
 
-    if None in (start_lat, start_lon, end_lat, end_lon):
-        return jsonify({'error': 'Geocoding failed. Check location names.'})
+    # Convert start and end to coordinates if needed
+    start_coords = geocode_location(start)
+    end_coords = geocode_location(end)
+    if not start_coords or not end_coords:
+        return jsonify({'error': 'Could not geocode start or end location.'}), 400
 
-    route_url = (
-        f"https://api.tomtom.com/routing/1/calculateRoute/"
-        f"{start_lat},{start_lon}:{end_lat},{end_lon}/json"
-        f"?key={TOMTOM_API_KEY}&routeType=fastest&traffic=true&computeBestOrder=false&alternatives=2"
-    )
+    # TomTom Routing API endpoint
+    url = f"https://api.tomtom.com/routing/1/calculateRoute/{start_coords}:{end_coords}/json"
 
-    response = requests.get(route_url)
+    params = {
+        'key': TOMTOM_API_KEY,
+        'routeType': route_type,
+        'traffic': traffic,
+        'travelMode': 'car',
+        'language': 'en-US',
+        'instructionsType': 'text',
+        'computeBestOrder': 'false',
+        'vehicleMaxSpeed': 120,
+        'vehicleWeight': 1600,
+        'vehicleLength': 4.5,
+        'vehicleWidth': 1.8,
+        'vehicleHeight': 1.6,
+        'vehicleCommercial': 'false'
+    }
 
-    if response.status_code != 200:
-        return jsonify({'error': f"Route fetch failed: {response.status_code}"})
-
-    data = response.json()
-    routes_info = []
-
-    for route in data.get('routes', []):
-        summary = route['summary']
-        legs = route['legs'][0]['points']
-        points = [{'lat': pt['latitude'], 'lon': pt['longitude']} for pt in legs]
-
-        routes_info.append({
-            'summary': {
-                'lengthInMeters': summary['lengthInMeters'],
-                'travelTimeInSeconds': summary['travelTimeInSeconds'],
-                'trafficDelayInSeconds': summary['trafficDelayInSeconds']
-            },
-            'points': points
-        })
-
-    return jsonify({'routes': routes_info})
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        return jsonify(response.json())
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
-
-
-
-
