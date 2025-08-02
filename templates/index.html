@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Smart Routing App</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        #map { height: 500px; margin-bottom: 20px; }
+        #routeInfo { background: #f9f9f9; padding: 10px; border-radius: 8px; }
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        label { margin-right: 10px; }
+    </style>
+</head>
+<body>
+    <h2>Smart Routing Map</h2>
+
+    <form id="routeForm">
+        <label for="start">Start:</label>
+        <input type="text" id="start" name="start" required>
+        <label for="end">Destination:</label>
+        <input type="text" id="end" name="end" required>
+        <button type="submit">Get Routes</button>
+    </form>
+
+    <div id="map"></div>
+
+    <h3>Route Summary:</h3>
+    <div id="routeInfo"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="{{ url_for('static', filename='map.js') }}"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
