@@ -28,12 +28,11 @@ function showLoading() {
     const routeDetails = document.getElementById("routeDetails");
     
     routeInfo.style.display = "block";
-    routeDetails.innerHTML = `
-        <div class="loading">
+    routeDetails.innerHTML = 
+        `<div class="loading">
             <i class="fas fa-spinner"></i>
             <p>Calculating optimal routes...</p>
-        </div>
-    `;
+        </div>`;
 }
 
 function showError(message) {
@@ -41,12 +40,11 @@ function showError(message) {
     const routeDetails = document.getElementById("routeDetails");
     
     routeInfo.style.display = "block";
-    routeDetails.innerHTML = `
-        <div class="error">
+    routeDetails.innerHTML = 
+        `<div class="error">
             <i class="fas fa-exclamation-triangle"></i>
             <strong>Error:</strong> ${message}
-        </div>
-    `;
+        </div>`;
 }
 
 function clearMap() {
@@ -159,8 +157,8 @@ function displayRouteInfo(routeData) {
     const arrivalTime = new Date(Date.now() + (summary.travelTimeInSeconds * 1000));
     
     routeInfo.style.display = "block";
-    routeDetails.innerHTML = `
-        <div class="route-card">
+    routeDetails.innerHTML = 
+        `<div class="route-card">
             <h4><i class="fas fa-route"></i> Recommended Route</h4>
             <div class="route-stats">
                 <div class="stat">
@@ -180,8 +178,7 @@ function displayRouteInfo(routeData) {
                     <span><strong>Arrival:</strong> ${arrivalTime.toLocaleTimeString()}</span>
                 </div>
             </div>
-        </div>
-    `;
+        </div>`;
 }
 
 // Handle form submission
@@ -192,6 +189,7 @@ document.getElementById("routeForm").addEventListener("submit", async function (
     const end = document.getElementById("end").value.trim();
     const routeType = document.getElementById("routeType").value;
     const traffic = document.getElementById("traffic").value;
+    const weather = document.getElementById("weather").value; // Added weather input
     const calculateBtn = document.getElementById("calculateBtn");
 
     if (!start || !end) {
@@ -206,7 +204,7 @@ document.getElementById("routeForm").addEventListener("submit", async function (
     clearMap();
 
     try {
-        // Make request to Flask backend
+        // Make request to Flask backend including weather option
         const response = await fetch("/calculate_route", {
             method: "POST",
             headers: {
@@ -216,7 +214,8 @@ document.getElementById("routeForm").addEventListener("submit", async function (
                 start: start,
                 end: end,
                 routeType: routeType,
-                traffic: traffic
+                traffic: traffic,
+                weather: weather
             })
         });
 
@@ -226,10 +225,41 @@ document.getElementById("routeForm").addEventListener("submit", async function (
             throw new Error(data.error || "Failed to calculate route");
         }
 
-        // Display the route
+        // Display the route info
         displayRouteInfo(data);
 
-        // Extract start and end coordinates from the response for markers
+        // Remove old weather info if any
+        const oldWeatherInfo = document.querySelector('.weather-info');
+        if (oldWeatherInfo) oldWeatherInfo.remove();
+
+        // Display weather info if available
+        if (data.weather) {
+            const weatherSection = document.createElement("div");
+            weatherSection.className = "weather-info";
+            weatherSection.style.marginTop = "20px";
+            weatherSection.style.paddingTop = "10px";
+            weatherSection.style.borderTop = "1px solid #eee";
+
+            weatherSection.innerHTML = `
+                <h4><i class="fas fa-cloud-sun"></i> Weather Info</h4>
+                <div style="display:flex; gap: 15px;">
+                    <div style="flex:1; background:#f8f9fa; border-radius:8px; padding:10px; text-align:center;">
+                        <h5>Start (${data.weather.start.location})</h5>
+                        <img src="https://openweathermap.org/img/wn/${data.weather.start.icon}@2x.png" alt="Weather icon" style="width:50px; height:50px;">
+                        <p>${data.weather.start.temp}°C, ${data.weather.start.description}</p>
+                    </div>
+                    <div style="flex:1; background:#f8f9fa; border-radius:8px; padding:10px; text-align:center;">
+                        <h5>End (${data.weather.end.location})</h5>
+                        <img src="https://openweathermap.org/img/wn/${data.weather.end.icon}@2x.png" alt="Weather icon" style="width:50px; height:50px;">
+                        <p>${data.weather.end.temp}°C, ${data.weather.end.description}</p>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById("routeDetails").appendChild(weatherSection);
+        }
+
+        // Add markers on the map
         if (data.routes && data.routes.length > 0) {
             const route = data.routes[0];
             if (route.summary && route.summary.startLocation && route.summary.endLocation) {
@@ -282,8 +312,8 @@ function setupAutocomplete(inputId) {
             if (matches.length > 0) {
                 const suggestionDiv = document.createElement('div');
                 suggestionDiv.className = 'suggestions';
-                suggestionDiv.style.cssText = `
-                    position: absolute;
+                suggestionDiv.style.cssText = 
+                    `position: absolute;
                     top: 100%;
                     left: 0;
                     right: 0;
@@ -294,17 +324,15 @@ function setupAutocomplete(inputId) {
                     max-height: 200px;
                     overflow-y: auto;
                     z-index: 1000;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                `;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);`;
                 
                 matches.forEach(match => {
                     const item = document.createElement('div');
                     item.textContent = match;
-                    item.style.cssText = `
-                        padding: 10px 15px;
+                    item.style.cssText = 
+                        `padding: 10px 15px;
                         cursor: pointer;
-                        border-bottom: 1px solid #f0f0f0;
-                    `;
+                        border-bottom: 1px solid #f0f0f0;`;
                     item.addEventListener('mouseover', () => {
                         item.style.backgroundColor = '#f8f9fa';
                     });

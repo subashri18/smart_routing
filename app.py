@@ -8,6 +8,7 @@ load_dotenv()
 app = Flask(__name__)
 
 TOMTOM_API_KEY = os.getenv('TOMTOM_API_KEY', '8apa9iB3Hpwhh1LWONc8ZJ1TbGttgVDK')
+OPENWEATHERMAP_API_KEY = os.getenv('OPENWEATHERMAP_API_KEY', 'YOUR_OPENWEATHER_API_KEY_HERE')
 
 @app.route('/')
 def index():
@@ -17,11 +18,11 @@ def index():
 def calculate_route():
     data = request.json
     
-    # Extract parameters from the request
     start = data.get('start')
     end = data.get('end')
     route_type = data.get('routeType', 'fastest')
     traffic = data.get('traffic', 'true')
+    weather_flag = data.get('weather', 'false')  # get weather option
 
     def geocode_location(location):
         geocode_url = f"https://api.tomtom.com/search/2/geocode/{location}.json"
@@ -34,22 +35,18 @@ def calculate_route():
             resp.raise_for_status()
             results = resp.json().get('results', [])
             if results:
-                position = results[0]['position']
-                return f"{position['lat']},{position['lon']}"
-            else:
-                return None
-        except Exception as e:
+                pos = results[0]['position']
+                return pos['lat'], pos['lon']
+            return None
+        except:
             return None
 
-    # Convert start and end to coordinates if needed
     start_coords = geocode_location(start)
     end_coords = geocode_location(end)
     if not start_coords or not end_coords:
         return jsonify({'error': 'Could not geocode start or end location.'}), 400
 
-    # TomTom Routing API endpoint
-    url = f"https://api.tomtom.com/routing/1/calculateRoute/{start_coords}:{end_coords}/json"
-
+    url = f"https://api.tomtom.com/routing/1/calculateRoute/{start_coords[0]},{start_coords[1]}:{end_coords[0]},{end_coords[1]}/json"
     params = {
         'key': TOMTOM_API_KEY,
         'routeType': route_type,
@@ -69,9 +66,41 @@ def calculate_route():
     try:
         response = requests.get(url, params=params)
         response.raise_for_status()
-        return jsonify(response.json())
-    except requests.exceptions.RequestException as e:
+        route_data = response.json()
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+    weather_data = {}
+    if weather_flag == "true":
+        def get_weather(lat, lon):
+            weather_url = "https://api.openweathermap.org/data/2.5/weather"
+            weather_params = {
+                'lat': lat,
+                'lon': lon,
+                'appid': OPENWEATHERMAP_API_KEY,
+                'units': 'metric'
+            }
+            try:
+                r = requests.get(weather_url, params=weather_params)
+                r.raise_for_status()
+                w = r.json()
+                return {
+                    'location': w.get('name', ''),
+                    'temp': w['main']['temp'],
+                    'description': w['weather'][0]['description'],
+                    'icon': w['weather'][0]['icon']
+                }
+            except:
+                return {'error': 'Weather fetch failed'}
+
+        weather_data['start'] = get_weather(*start_coords)
+        weather_data['end'] = get_weather(*end_coords)
+
+    return jsonify({
+        'routes': route_data.get('routes', []),  # maintain your original key name here
+        'weather': weather_data if weather_flag == "true" else None
+    })
 
 if __name__ == '__main__':
     app.run(debug=True)
+
