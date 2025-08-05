@@ -85,6 +85,33 @@ function addMarkers(startCoords, endCoords) {
     }).addTo(map);
 }
 
+async function addMarkersFromLocations(startLocation, endLocation) {
+    try {
+        // Geocode start location
+        const startResponse = await fetch(`https://api.tomtom.com/search/2/geocode/${encodeURIComponent(startLocation)}.json?key=${window.TOMTOM_API_KEY}&limit=1`);
+        const startData = await startResponse.json();
+        
+        // Geocode end location
+        const endResponse = await fetch(`https://api.tomtom.com/search/2/geocode/${encodeURIComponent(endLocation)}.json?key=${window.TOMTOM_API_KEY}&limit=1`);
+        const endData = await endResponse.json();
+        
+        if (startData.results && startData.results.length > 0 && endData.results && endData.results.length > 0) {
+            const startCoords = {
+                lat: startData.results[0].position.lat,
+                lon: startData.results[0].position.lon
+            };
+            const endCoords = {
+                lat: endData.results[0].position.lat,
+                lon: endData.results[0].position.lon
+            };
+            
+            addMarkers(startCoords, endCoords);
+        }
+    } catch (error) {
+        console.log("Could not add markers:", error);
+    }
+}
+
 function formatTime(seconds) {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -116,24 +143,35 @@ function displayRouteInfo(routeData) {
     const summary = route.summary;
     
     // Extract coordinates for the route
-    const legs = route.legs || [];
     const allPoints = [];
     
-    legs.forEach(leg => {
-        if (leg.points) {
-            leg.points.forEach(point => {
-                allPoints.push([point.latitude, point.longitude]);
-            });
-        }
-    });
+    // Try to get points from legs first
+    if (route.legs && route.legs.length > 0) {
+        route.legs.forEach(leg => {
+            if (leg.points) {
+                leg.points.forEach(point => {
+                    allPoints.push([point.latitude, point.longitude]);
+                });
+            }
+        });
+    }
     
-    // If no points in legs, try to get from guidance
+    // If no points from legs, try guidance instructions
     if (allPoints.length === 0 && route.guidance && route.guidance.instructions) {
         route.guidance.instructions.forEach(instruction => {
             if (instruction.point) {
                 allPoints.push([instruction.point.latitude, instruction.point.longitude]);
             }
         });
+    }
+    
+    // If still no points, create a simple line between start and end
+    if (allPoints.length === 0 && summary) {
+        // Use summary coordinates if available
+        if (summary.startLocation && summary.endLocation) {
+            allPoints.push([summary.startLocation.lat, summary.startLocation.lon]);
+            allPoints.push([summary.endLocation.lat, summary.endLocation.lon]);
+        }
     }
     
     // Draw the route on map
@@ -228,6 +266,10 @@ document.getElementById("routeForm").addEventListener("submit", async function (
         // Display the route info
         displayRouteInfo(data);
 
+        // Add markers on the map using geocoded coordinates
+        // We need to geocode the locations again for markers since TomTom response doesn't always include coordinates
+        await addMarkersFromLocations(start, end);
+
         // Remove old weather info if any
         const oldWeatherInfo = document.querySelector('.weather-info');
         if (oldWeatherInfo) oldWeatherInfo.remove();
@@ -257,17 +299,6 @@ document.getElementById("routeForm").addEventListener("submit", async function (
             `;
 
             document.getElementById("routeDetails").appendChild(weatherSection);
-        }
-
-        // Add markers on the map
-        if (data.routes && data.routes.length > 0) {
-            const route = data.routes[0];
-            if (route.summary && route.summary.startLocation && route.summary.endLocation) {
-                addMarkers(
-                    route.summary.startLocation,
-                    route.summary.endLocation
-                );
-            }
         }
 
     } catch (error) {
